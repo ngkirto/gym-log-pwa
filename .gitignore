@@ -1,0 +1,3 @@
+*.json
+!manifest.webmanifest
+setup-log.txt

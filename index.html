@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>兩分法訓練記錄</title>
+<meta name="theme-color" content="#141920">
+<meta name="description" content="A1/B1/A2/B2 訓練記錄，記重量同次數。">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+HK:wght@400;500;700&display=swap">
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+body{margin:0;font-size:14px}
+[hidden]{display:none!important}
+</style>
+<style>
+/* Layout: one narrow column like a gym clipboard; day tabs coloured like bumper plates (red 25 / blue 20 / yellow 15 / green 10) */
+:root{
+  --bg:#ECEFF2; --card:#FFFFFF; --ink:#141920; --muted:#5B6570; --line:#D3D9E0; --field:#F5F7F9;
+  --red:#C8243A; --blue:#1C5BC9; --yellow:#E2A90A; --green:#1B8E4C; --on-yellow:#1A1500;
+  --accent:var(--red); --on-accent:#FFFFFF;
+  --good:#1B8E4C; --good-bg:#E3F4EA;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Noto Sans HK","PingFang HK","Microsoft JhengHei",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F1216; --card:#181D23; --ink:#E8ECF0; --muted:#97A1AC; --line:#2A3139; --field:#11151A;
+  --red:#F0566B; --blue:#5C93F5; --yellow:#F2C230; --green:#3CC47A; --on-yellow:#1A1500;
+  --good:#3CC47A; --good-bg:#14301F; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1216; --card:#181D23; --ink:#E8ECF0; --muted:#97A1AC; --line:#2A3139; --field:#11151A;
+  --red:#F0566B; --blue:#5C93F5; --yellow:#F2C230; --green:#3CC47A; --on-yellow:#1A1500;
+  --good:#3CC47A; --good-bg:#14301F; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);line-height:1.45}
+body[data-day="A1"]{--accent:var(--red);--on-accent:#fff}
+body[data-day="B1"]{--accent:var(--blue);--on-accent:#fff}
+body[data-day="A2"]{--accent:var(--yellow);--on-accent:var(--on-yellow)}
+body[data-day="B2"]{--accent:var(--green);--on-accent:#fff}
+.wrap{max-width:560px;margin:0 auto;padding-block:16px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+header h1{font-family:var(--f-display);font-weight:700;font-size:30px;letter-spacing:.01em;margin:0;line-height:1.1;text-wrap:balance}
+header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.tab{border:2px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:8px 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;font-family:var(--f-body)}
+.tab b{font-family:var(--f-display);font-size:24px;line-height:1}
+.tab span{font-size:11px;color:var(--muted)}
+.tab[data-d="A1"]{--c:var(--red);--oc:#fff}.tab[data-d="B1"]{--c:var(--blue);--oc:#fff}.tab[data-d="A2"]{--c:var(--yellow);--oc:var(--on-yellow)}.tab[data-d="B2"]{--c:var(--green);--oc:#fff}
+.tab b{color:var(--c)}
+.tab[aria-selected="true"]{background:var(--c);border-color:var(--c)}
+.tab[aria-selected="true"] b,.tab[aria-selected="true"] span{color:var(--oc)}
+.tab:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.bar label{font-size:12px;color:var(--muted);letter-spacing:.04em}
+.bar input[type=date]{font:inherit;font-size:15px;background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.status{margin-left:auto;font-size:12px;color:var(--muted)}
+.status.ok{color:var(--good)}
+.btn{font:inherit;font-size:13px;border-radius:8px;padding:7px 12px;border:1px solid var(--line);background:var(--field);color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:700}
+.note{font-size:12px;color:var(--muted);background:var(--card);border:1px dashed var(--line);border-radius:10px;padding:8px 12px}
+.list{display:flex;flex-direction:column;gap:10px}
+.ss{border-left:4px solid var(--accent);padding-left:8px;display:flex;flex-direction:column;gap:8px}
+.ss-tag{font-family:var(--f-display);font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ex{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.ex-head{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap}
+.ex-name{font-weight:700;font-size:15px;flex:1 1 auto;min-width:0}
+.ex-target{font-family:var(--f-display);font-size:18px;font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
+body[data-day="A2"] .ex-target{color:var(--ink)}
+.meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.rest{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--ink)}
+.pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--good-bg);color:var(--good)}
+.unit{font:inherit;font-size:12px;border:1px solid var(--line);background:var(--field);color:var(--ink);border-radius:999px;padding:2px 10px;cursor:pointer}
+.sets{display:flex;flex-direction:column;gap:6px}
+.set{display:grid;grid-template-columns:44px 1fr 18px 1fr;align-items:center;gap:6px}
+.set.bw{grid-template-columns:44px 1fr}
+.set-n{font-family:var(--f-display);font-size:15px;color:var(--muted);font-variant-numeric:tabular-nums}
+.field{position:relative;min-width:0}
+.field input{width:100%;box-sizing:border-box;font-family:var(--f-display);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 40px 6px 10px}
+.field input::placeholder{color:var(--muted);opacity:.55}
+.field em{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-style:normal;font-size:12px;color:var(--muted);pointer-events:none}
+.x{text-align:center;color:var(--muted)}
+.add{align-self:flex-start;font:inherit;font-size:12px;background:none;border:none;color:var(--muted);cursor:pointer;padding:2px 0;text-decoration:underline}
+h2{font-family:var(--f-display);font-weight:700;font-size:22px;margin:8px 0 0}
+.hist{display:flex;flex-direction:column;gap:8px}
+.h{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.h .d{font-family:var(--f-display);font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.h .s{font-size:12px;color:var(--muted);flex:1 1 140px;min-width:0}
+.h.current{border-color:var(--accent)}
+.empty{color:var(--muted);font-size:13px}
+@media (prefers-reduced-motion:no-preference){.tab,.btn{transition:background .15s,border-color .15s}}
+.account{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.account .who{font-size:13px;color:var(--muted);flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>兩分法訓練記錄</h1>
+    <p>A 胸背 · B 腳膊手 · 每週兩輪。灰色數字係上次做到嘅重量同次數。</p>
+  </header>
+
+  <div class="account" id="account" hidden></div>
+
+  <div class="tabs" role="tablist" id="tabs"></div>
+
+  <div class="bar">
+    <label for="date">日期</label>
+    <input type="date" id="date">
+    <button class="btn" id="newBtn" type="button">開新一次</button>
+    <span class="status" id="status" aria-live="polite">載入中…</span>
+  </div>
+
+  <div class="note" id="note" hidden></div>
+
+  <div class="list" id="list"></div>
+
+  <h2 id="histTitle">過往記錄</h2>
+  <div class="hist" id="hist"></div>
+
+  <div class="tools">
+    <button class="btn" id="exportBtn" type="button">匯出備份（JSON）</button>
+    <button class="btn" id="importBtn" type="button">匯入記錄</button>
+    <input type="file" id="importFile" accept="application/json,.json" hidden>
+  </div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
