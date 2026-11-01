@@ -58,6 +58,8 @@ const $ = id => document.getElementById(id);
 function today(){const d=new Date();const p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())}
 function lsGet(k,f){try{const v=localStorage.getItem(k);return v?JSON.parse(v):f}catch(e){return f}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+// For records: a failed write must not look like a save.
+function lsSave(v){try{localStorage.setItem("wlog.sessions",JSON.stringify(v))}catch(e){throw {code:"quota_exceeded"}}}
 
 const S = {day:lsGet("wlog.day","A1"), date:today(), sets:{}, units:{}, curId:null, sessions:[], dirty:false};
 
@@ -99,14 +101,14 @@ const store = {
   ref(id){ return doc(this.db,"users",this.uid,"sessions",id); },
   async save(id,body){
     if(this.mode==="db") return setDoc(this.ref(id),body);
-    const all=lsGet("wlog.sessions",{}); all[id]=body; lsSet("wlog.sessions",all); this.emitLocal();
+    const all=lsGet("wlog.sessions",{}); all[id]=body; lsSave(all); this.emitLocal();
   },
   async remove(id){
     if(this.mode==="db") return deleteDoc(this.ref(id));
-    const all=lsGet("wlog.sessions",{}); delete all[id]; lsSet("wlog.sessions",all); this.emitLocal();
+    const all=lsGet("wlog.sessions",{}); delete all[id]; lsSave(all); this.emitLocal();
   },
   async saveMany(list){
-    if(this.mode!=="db"){ const all=lsGet("wlog.sessions",{}); list.forEach(x=>{const {id,...b}=x; all[id]=b;}); lsSet("wlog.sessions",all); this.emitLocal(); return; }
+    if(this.mode!=="db"){ const all=lsGet("wlog.sessions",{}); list.forEach(x=>{const {id,...b}=x; all[id]=b;}); lsSave(all); this.emitLocal(); return; }
     for(let i=0;i<list.length;i+=400){
       const b=writeBatch(this.db);
       list.slice(i,i+400).forEach(x=>{const {id,...body}=x; b.set(this.ref(id),body);});
@@ -143,11 +145,12 @@ async function importJson(file){
   try{
     let data=JSON.parse(await file.text());
     if(!Array.isArray(data)) data=Object.entries(data).map(([id,v])=>({id,...v}));
-    const list=data.filter(x=>x&&x.day&&x.date&&x.sets).map(x=>({id:x.id||(x.date+"_"+x.day),day:x.day,date:x.date,sets:x.sets,units:x.units||{},updated:x.updated||new Date().toISOString()}));
+    const list=cleanAll(data).filter(x=>Object.values(x.sets).some(a=>a.some(v=>v.w!==""||v.r!=="")))
+      .map(x=>({...x,updated:x.updated||new Date().toISOString()}));
     if(!list.length){ showNote("檔案入面搵唔到訓練記錄。"); return; }
     await store.saveMany(list);
     setStatus("已匯入 "+list.length+" 次記錄 ✓",true);
-  }catch(e){ showNote("匯入失敗：檔案唔係有效嘅 JSON。"); }
+  }catch(e){ showNote(e&&e.code==="quota_exceeded"?"匯入失敗：儲存空間已滿。":e instanceof SyntaxError?"匯入失敗：檔案唔係有效嘅 JSON。":"匯入失敗（"+(e&&e.code||"未知錯誤")+"）。"); }
 }
 
 function showNote(t){$("note").textContent=t;$("note").hidden=false}
@@ -155,14 +158,36 @@ function hideNote(){$("note").hidden=true}
 function setStatus(t,ok){const s=$("status");s.textContent=t;s.className="status"+(ok?" ok":"")}
 
 /* ---------- helpers ---------- */
+// Clean one record from storage or a file; returns null when it can't be used.
+const ID_RE=/^[A-Za-z0-9_\-]{1,80}$/, DATE_RE=/^\d{4}-\d{2}-\d{2}$/;
+const num=v=>String(v??"").replace(/[^0-9.]/g,"").slice(0,8);
+function clean(x){
+  if(!x||typeof x!=="object"||!PLAN[x.day]||!DATE_RE.test(String(x.date))||!x.sets||typeof x.sets!=="object") return null;
+  const id=ID_RE.test(String(x.id||""))?String(x.id):x.date+"_"+x.day;
+  const sets={};
+  for(const [k,a] of Object.entries(x.sets)){
+    if(!Array.isArray(a)) continue;
+    sets[k]=a.slice(0,20).map(v=>v&&typeof v==="object"?{w:num(v.w),r:num(v.r)}:{w:"",r:""});
+  }
+  const units={};
+  if(x.units&&typeof x.units==="object") for(const [k,u] of Object.entries(x.units)) if(u==="kg"||u==="lb") units[k]=u;
+  const updated=typeof x.updated==="string"?x.updated:"";
+  return {id,day:x.day,date:x.date,sets,units,updated};
+}
+const cleanAll=list=>list.map(clean).filter(Boolean);
+
 // The record on screen. null = a blank form that is not saved yet; it gets an id on its first save.
 function newId(date,day){ const base=date+"_"+day; let id=base, n=2; while(S.sessions.some(x=>x.id===id)) id=base+"_"+(n++); return id; }
 function findFor(date,day){ return S.sessions.filter(x=>x.date===date&&x.day===day).sort((a,b)=>(b.updated||"").localeCompare(a.updated||""))[0]||null; }
 function topRep(r){const p=String(r).split("-");return Number(p[p.length-1])}
+// Order key: date first, then save time (so two sessions on one day keep their order).
+const key=x=>(x.date||"")+"|"+(x.updated||"");
 function lastFor(k){
   // most recent session (any day) before the one on screen that logged this exercise
-  const list=S.sessions.filter(x=>x.id!==S.curId && x.sets && x.sets[k] && x.sets[k].some(v=>v&&(v.w!==""||v.r!=="")))
-    .sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  const cur=S.sessions.find(x=>x.id===S.curId);
+  const here=cur?key(cur):S.date+"|~";   // a new, unsaved form counts as the latest of its date
+  const list=S.sessions.filter(x=>x.id!==S.curId && key(x)<here && x.sets[k] && x.sets[k].some(v=>v.w!==""||v.r!==""))
+    .sort((a,b)=>key(b).localeCompare(key(a)));
   return list[0]||null;
 }
 function hasData(){return Object.values(S.sets).some(a=>a.some(v=>v&&((v.w??"")!==""||(v.r??"")!=="")))}
@@ -261,7 +286,7 @@ function field(k,s,f,val,ph,suffix,label){
 function renderHist(){
   $("histTitle").textContent=S.day+" 過往記錄";
   const H=$("hist");H.innerHTML="";
-  const list=S.sessions.filter(x=>x.day===S.day).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  const list=S.sessions.filter(x=>x.day===S.day).sort((a,b)=>key(b).localeCompare(key(a)));
   if(!list.length){const p=document.createElement("div");p.className="empty";p.textContent="仲未有 "+S.day+" 記錄。填完第一組就會自動儲存。";H.appendChild(p);return;}
   list.slice(0,30).forEach(x=>{
     const n=Object.values(x.sets||{}).reduce((t,a)=>t+a.filter(v=>v&&v.r!=="").length,0);
@@ -298,7 +323,7 @@ function flush(){
   setStatus("儲存中…");
   chain=chain.then(()=>store.save(id,body)).then(async()=>{
     setStatus("已儲存 ✓",true); renderHist();
-  }).catch(e=>{S.dirty=true;setStatus(e&&e.code==="quota_exceeded"?"儲存空間已滿":"儲存失敗，稍後再試");});
+  }).catch(e=>{S.dirty=true;setStatus(e&&e.code==="quota_exceeded"?"儲存空間已滿，未能儲存":"儲存失敗，稍後再試");});
   return chain;
 }
 
@@ -324,7 +349,7 @@ $("date").value=S.date;
 renderAll();
 let first=true;
 store.init(list=>{
-  S.sessions=list;
+  S.sessions=cleanAll(list);
   if(first && list.length){ first=false; const t=findFor(S.date,S.day); if(t && !S.dirty && !hasData() && !S.curId){ load(t); return; } }
   const typing=document.activeElement&&document.activeElement.tagName==="INPUT"&&$("list").contains(document.activeElement);
   if(!S.dirty && !typing){ renderList(); }

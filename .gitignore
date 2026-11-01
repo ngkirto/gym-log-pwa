@@ -1,3 +1,5 @@
 *.json
 !manifest.webmanifest
+!package.json
 setup-log.txt
+node_modules/

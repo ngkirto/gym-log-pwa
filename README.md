@@ -38,3 +38,16 @@ A1／B1／A2／B2 訓練記錄：逐組記重量同次數，顯示上次成績�
 ## 搬舊記錄
 
 頁面底部「匯入記錄」揀 JSON 檔（格式同「匯出備份」一樣）。
+
+## 測試
+
+功能測試同壓力測試用 Playwright 喺真瀏覽器操作 app（Firebase 會被替換，唔會掂到真資料庫）。
+
+```powershell
+npm install
+npx playwright install chromium
+npm test
+```
+
+- `tests/app.test.mjs`：儲存、上次記錄、可加重、kg/lb、加組、開新一次、改日期、轉分頁、刪除、匯入匯出、手機闊度
+- `tests/stress.test.mjs`：1,000 次記錄載入、快速轉分頁、快速輸入、2,000 次記錄匯入、儲存空間滿

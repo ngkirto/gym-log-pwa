@@ -1,5 +1,5 @@
 // App shell cache. Bump VERSION whenever files change so phones pick up the update.
-const VERSION = "v3";
+const VERSION = "v4";
 const SHELL = ["./", "index.html", "app.js", "firebase-config.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", e => {
