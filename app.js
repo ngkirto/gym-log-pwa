@@ -59,7 +59,7 @@ function today(){const d=new Date();const p=n=>String(n).padStart(2,"0");return 
 function lsGet(k,f){try{const v=localStorage.getItem(k);return v?JSON.parse(v):f}catch(e){return f}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 
-const S = {day:lsGet("wlog.day","A1"), date:today(), sets:{}, units:{}, savedId:null, sessions:[], dirty:false};
+const S = {day:lsGet("wlog.day","A1"), date:today(), sets:{}, units:{}, curId:null, sessions:[], dirty:false};
 
 /* ---------- storage: Firebase Firestore when signed in, this device otherwise ---------- */
 const store = {
@@ -155,12 +155,13 @@ function hideNote(){$("note").hidden=true}
 function setStatus(t,ok){const s=$("status");s.textContent=t;s.className="status"+(ok?" ok":"")}
 
 /* ---------- helpers ---------- */
-const curId = () => S.date+"_"+S.day;
+// The record on screen. null = a blank form that is not saved yet; it gets an id on its first save.
+function newId(date,day){ const base=date+"_"+day; let id=base, n=2; while(S.sessions.some(x=>x.id===id)) id=base+"_"+(n++); return id; }
+function findFor(date,day){ return S.sessions.filter(x=>x.date===date&&x.day===day).sort((a,b)=>(b.updated||"").localeCompare(a.updated||""))[0]||null; }
 function topRep(r){const p=String(r).split("-");return Number(p[p.length-1])}
 function lastFor(k){
   // most recent session (any day) before the one on screen that logged this exercise
-  const cid=curId();
-  const list=S.sessions.filter(x=>x.id!==cid && x.id!==S.savedId && x.sets && x.sets[k] && x.sets[k].some(v=>v&&(v.w!==""||v.r!=="")))
+  const list=S.sessions.filter(x=>x.id!==S.curId && x.sets && x.sets[k] && x.sets[k].some(v=>v&&(v.w!==""||v.r!=="")))
     .sort((a,b)=>(b.date||"").localeCompare(a.date||""));
   return list[0]||null;
 }
@@ -174,7 +175,7 @@ function renderTabs(){
     b.className="tab";b.type="button";b.dataset.d=d;b.setAttribute("role","tab");
     b.setAttribute("aria-selected",d===S.day?"true":"false");
     b.innerHTML="<b>"+d+"</b><span>"+PLAN[d].label+"</span>";
-    b.onclick=()=>{ if(d===S.day) return; flush(); S.day=d; lsSet("wlog.day",d); startNew(S.date); };
+    b.onclick=()=>{ if(d===S.day) return; flush(); S.day=d; lsSet("wlog.day",d); openDate(S.date); };
     $("tabs").appendChild(b);
   });
   document.body.dataset.day=S.day;
@@ -268,16 +269,16 @@ function renderHist(){
     let best="";
     if(first){const top=x.sets[first.k].filter(v=>v&&v.w!=="").sort((a,b)=>Number(b.w)-Number(a.w))[0];
       best=" · "+first.n+" "+top.w+((x.units&&x.units[first.k])||first.u)+(top.r?" × "+top.r:"");}
-    const row=document.createElement("div");row.className="h"+(x.id===S.savedId?" current":"");
+    const row=document.createElement("div");row.className="h"+(x.id===S.curId?" current":"");
     row.innerHTML='<span class="d"></span><span class="s"></span>';
     row.querySelector(".d").textContent=(x.date||"").replace(/-/g,"/");
     row.querySelector(".s").textContent=n+" 組"+best;
-    const open=document.createElement("button");open.type="button";open.className="btn";open.textContent=x.id===S.savedId?"編輯緊":"打開";
-    open.disabled=x.id===S.savedId;
+    const open=document.createElement("button");open.type="button";open.className="btn";open.textContent=x.id===S.curId?"編輯緊":"打開";
+    open.disabled=x.id===S.curId;
     open.onclick=()=>{flush();load(x);};
     const del=document.createElement("button");del.type="button";del.className="btn";del.textContent="刪除";
     del.onclick=()=>{
-      if(del.dataset.confirm){store.remove(x.id).catch(()=>setStatus("刪除失敗"));if(x.id===S.savedId)startNew(today());}
+      if(del.dataset.confirm){store.remove(x.id).catch(()=>setStatus("刪除失敗"));if(x.id===S.curId)blank(S.date);}
       else{del.dataset.confirm="1";del.textContent="確定刪除？";setTimeout(()=>{if(del.isConnected){delete del.dataset.confirm;del.textContent="刪除";}},4000);}
     };
     row.append(open,del);H.appendChild(row);
@@ -292,31 +293,30 @@ function flush(){
   if(!S.dirty) return chain;
   S.dirty=false;
   if(!hasData()){setStatus("");return chain;}
-  const id=curId(), old=S.savedId;
+  const id=S.curId||(S.curId=newId(S.date,S.day));
   const body={day:S.day,date:S.date,sets:JSON.parse(JSON.stringify(S.sets)),units:{...S.units},updated:new Date().toISOString()};
   setStatus("儲存中…");
   chain=chain.then(()=>store.save(id,body)).then(async()=>{
-    S.savedId=id;
-    if(old && old!==id) await store.remove(old);
     setStatus("已儲存 ✓",true); renderHist();
   }).catch(e=>{S.dirty=true;setStatus(e&&e.code==="quota_exceeded"?"儲存空間已滿":"儲存失敗，稍後再試");});
   return chain;
 }
 
 function load(x){
-  S.date=x.date;S.day=x.day;S.sets=JSON.parse(JSON.stringify(x.sets||{}));S.units={...(x.units||{})};S.savedId=x.id;S.dirty=false;
+  S.date=x.date;S.day=x.day;S.sets=JSON.parse(JSON.stringify(x.sets||{}));S.units={...(x.units||{})};S.curId=x.id;S.dirty=false;
   $("date").value=S.date; renderAll(); setStatus("");
 }
-function startNew(date){
-  const id=date+"_"+S.day; const ex=S.sessions.find(x=>x.id===id);
-  if(ex){load(ex);return;}
-  S.date=date;S.sets={};S.units={};S.savedId=null;S.dirty=false;
-  $("date").value=S.date; renderAll(); setStatus("");
+// A blank form for this date and day; nothing is saved until you fill in a set.
+function blank(date){
+  S.date=date;S.sets={};S.units={};S.curId=null;S.dirty=false;
+  $("date").value=S.date; renderAll(); setStatus("新一次："+date.slice(5).replace("-","/")+" "+S.day);
 }
+// Go to a date: open that day's record if there is one, else a blank form.
+function openDate(date){ const ex=findFor(date,S.day); if(ex) load(ex); else blank(date); }
 function renderAll(){renderTabs();renderList();renderHist();}
 
-$("date").onchange=()=>{ if(!$("date").value) return; S.date=$("date").value; if(hasData()) touch(); else startNew(S.date); };
-$("newBtn").onclick=()=>{flush();startNew(today());};
+$("date").onchange=()=>{ const d=$("date").value; if(!d) return; flush(); openDate(d); };
+$("newBtn").onclick=()=>{ flush(); blank(today()); };
 window.addEventListener("pagehide",flush);
 document.addEventListener("visibilitychange",()=>{if(document.hidden)flush();});
 
@@ -325,7 +325,7 @@ renderAll();
 let first=true;
 store.init(list=>{
   S.sessions=list;
-  if(first && list.length){ first=false; const t=list.find(x=>x.id===curId()); if(t && !S.dirty && !hasData()){ load(t); return; } }
+  if(first && list.length){ first=false; const t=findFor(S.date,S.day); if(t && !S.dirty && !hasData() && !S.curId){ load(t); return; } }
   const typing=document.activeElement&&document.activeElement.tagName==="INPUT"&&$("list").contains(document.activeElement);
   if(!S.dirty && !typing){ renderList(); }
   renderHist();

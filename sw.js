@@ -1,5 +1,5 @@
 // App shell cache. Bump VERSION whenever files change so phones pick up the update.
-const VERSION = "v1";
+const VERSION = "v3";
 const SHELL = ["./", "index.html", "app.js", "firebase-config.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", e => {
@@ -12,10 +12,12 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== self.location.origin) return;
+  // Bypass the browser's HTTP cache (GitHub Pages caches for 10 minutes) so updates show up right away.
+  const fresh = e.request.mode === "navigate" ? new Request(url.href, { cache: "no-cache" }) : new Request(e.request, { cache: "no-cache" });
   e.respondWith(
-    fetch(e.request).then(res => {
+    fetch(fresh).then(res => {
       const copy = res.clone();
-      caches.open(VERSION).then(c => c.put(e.request, copy));
+      if (res.ok) caches.open(VERSION).then(c => c.put(e.request, copy));
       return res;
     }).catch(() => caches.match(e.request).then(r => r || caches.match("index.html")))
   );
